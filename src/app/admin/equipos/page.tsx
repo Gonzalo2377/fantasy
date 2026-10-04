@@ -1,7 +1,8 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { saveTeam } from "@/app/admin/actions";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { db, schema } from "@/db";
+import { requireAdminClub } from "@/lib/admin-club";
 
 function TeamForm({ t }: { t?: typeof schema.clubTeams.$inferSelect }) {
   return (
@@ -23,10 +24,11 @@ function TeamForm({ t }: { t?: typeof schema.clubTeams.$inferSelect }) {
 }
 
 export default async function TeamsAdmin() {
-  const teams = await db.select().from(schema.clubTeams).orderBy(asc(schema.clubTeams.sort));
+  const club = await requireAdminClub();
+  const teams = await db.select().from(schema.clubTeams).where(eq(schema.clubTeams.clubId, club.id)).orderBy(asc(schema.clubTeams.sort));
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted">Solo equipos cuyos jugadores sean mayores de edad. Los menores se excluyen automáticamente por fecha de nacimiento.</p>
+      <p className="text-sm text-muted">Equipos de <b>{club.name}</b>. Solo equipos cuyos jugadores sean mayores de edad. Los menores se excluyen automáticamente por fecha de nacimiento.</p>
       {teams.map((t) => <TeamForm key={t.id} t={t} />)}
       <h2 className="section-title">Nuevo equipo</h2>
       <TeamForm />

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { requireAdminClub } from "@/lib/admin-club";
 import { matchday } from "@/lib/matchday";
 import { formatDateTime } from "@/lib/time";
 
 export default async function AdminHome() {
-  const { gameweek, matches } = await matchday();
+  const club = await requireAdminClub();
+  const { gameweek, matches } = await matchday(club.id);
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-bold">{gameweek?.name ?? "Sin jornadas"}</h2>

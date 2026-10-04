@@ -1,7 +1,8 @@
-import { asc } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { importPlayersCsv, savePlayer } from "@/app/admin/actions";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { db, schema } from "@/db";
+import { requireAdminClub } from "@/lib/admin-club";
 import { ageOn, isAdult } from "@/lib/age";
 
 type Team = typeof schema.clubTeams.$inferSelect;
@@ -27,8 +28,11 @@ function PlayerForm({ p, teams, teamId }: { p?: Player; teams: Team[]; teamId?: 
 }
 
 export default async function PlayersAdmin() {
-  const teams = await db.select().from(schema.clubTeams).orderBy(asc(schema.clubTeams.sort));
-  const players = await db.select().from(schema.players).orderBy(asc(schema.players.position), asc(schema.players.name));
+  const club = await requireAdminClub();
+  const teams = await db.select().from(schema.clubTeams).where(eq(schema.clubTeams.clubId, club.id)).orderBy(asc(schema.clubTeams.sort));
+  const players = teams.length
+    ? await db.select().from(schema.players).where(inArray(schema.players.clubTeamId, teams.map((t) => t.id))).orderBy(asc(schema.players.position), asc(schema.players.name))
+    : [];
   return (
     <div className="space-y-4">
       <details className="card">

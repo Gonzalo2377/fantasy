@@ -14,7 +14,8 @@ const NUM_FIELDS: [keyof ActaLine, string][] = [
   ["penMissed", "PenF"],
 ];
 
-export function ActaEditor({ matchId, roster, initial, goalsFor, goalsAgainst, actaUrl }: {
+export function ActaEditor({ clubLabel, matchId, roster, initial, goalsFor, goalsAgainst, actaUrl }: {
+  clubLabel: string;
   matchId: number;
   roster: { id: number; name: string; position: Position }[];
   initial: ActaLine[];
@@ -76,7 +77,7 @@ export function ActaEditor({ matchId, roster, initial, goalsFor, goalsAgainst, a
 
       <div className="card flex items-center justify-center gap-3">
         <span className="text-sm font-semibold">Resultado</span>
-        <input className="input w-16 text-center" inputMode="numeric" value={gf} onChange={(e) => setGf(Number(e.target.value) || 0)} aria-label="Goles Europa" />
+        <input className="input w-16 text-center" inputMode="numeric" value={gf} onChange={(e) => setGf(Number(e.target.value) || 0)} aria-label={`Goles ${clubLabel}`} />
         <span>–</span>
         <input className="input w-16 text-center" inputMode="numeric" value={ga} onChange={(e) => setGa(Number(e.target.value) || 0)} aria-label="Goles rival" />
       </div>

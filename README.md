@@ -1,22 +1,26 @@
-# Fantasy Europa ⚽
+# Fantasy Clubs ⚽
 
-Fantasy de **todos los equipos +18 del CE Europa**, masculino y femenino en un mismo equipo.
-Web móvil-first instalable como app (PWA).
+Fantasy de fútbol **por clubs**: cada liga pertenece a un club y solo usa los equipos +18 de ese club
+(masculino y femenino mezclados), sus jugadores, su calendario y sus resultados. El piloto es el **CE Europa**.
+Web móvil-first instalable como app (PWA). El nombre es provisional (`src/lib/brand.ts` o `NEXT_PUBLIC_APP_NAME`).
 
-## Qué incluye
+## Cómo funciona
 
-- **Cuentas** con email y contraseña (hay que confirmar ser mayor de edad).
-- **Ligas públicas** (te mete en una con hueco o crea una nueva) y **privadas** con código para compartir.
-- **Equipo inicial aleatorio** (11 jugadores: 1 POR, 4 DEF, 4 MED, 2 DEL) y **20 M€** de caja.
-- **Mercado diario de pujas**: cada día a las 8:00 (hora de Madrid) se resuelven las pujas secretas y salen jugadores nuevos.
-  También puedes vender al instante o subastar a tus rivales. Cada jugador solo puede estar en un equipo por liga.
-- **Alineación** sobre el campo con 7 formaciones y capitán (puntos x2). Se bloquea al cierre de la jornada.
-- **Puntos desde el acta**: minutos, goles por posición, portería a cero, goles encajados, resultado, tarjetas, penaltis, propia puerta.
-  El valor de mercado sube o baja según los puntos. Reglas en `/reglas` y en `src/lib/scoring.ts`.
-- **Partidos de la jornada con marcador en directo** (se refresca solo cada 20 s).
-- **Panel de administración** (`/admin`): equipos, jugadores (alta manual o CSV), jornadas, partidos,
-  marcador en directo y acta.
-- **Solo mayores de edad**: cualquier jugador menor de 18 años según su fecha de nacimiento queda excluido del juego automáticamente.
+- **Clubs** (`/admin/clubes`): cada club tiene sus equipos, jugadores, jornadas y partidos. El panel de admin
+  trabaja sobre el club elegido arriba.
+- **Ligas** de un club: privadas con código o públicas (se elige el club). Al entrar recibes **11 jugadores al azar
+  del club** (1 POR, 4 DEF, 4 MED, 2 DEL, de cualquiera de sus equipos) y **20 M€**.
+- **Mercado diario de pujas** con jugadores libres **del club de la liga** (cierre a las 8:00, hora de Madrid).
+- **Alineación** con 7 formaciones y capitán (x2); se bloquea al cierre de la jornada del club.
+- **Partidos** de la jornada del club con marcador en directo (se refresca cada 20 s).
+- **Puntos desde el acta** y valor de mercado que sube o baja (`src/lib/scoring.ts`, `/reglas`).
+- **Solo mayores de edad**: los menores de 18 según su fecha de nacimiento quedan fuera automáticamente.
+
+### Liga de prueba del CE Europa
+
+Con los datos de ejemplo hay una liga privada **"Liga CE Europa"** con código **`EUROPA`**:
+regístrate, entra con ese código y te dará un equipo con jugadores del Europa, sus partidos y su mercado.
+(Los jugadores y rivales de ejemplo son ficticios.)
 
 ## Probarlo en local
 
@@ -26,7 +30,7 @@ npm run setup     # crea la base de datos y datos de ejemplo
 npm run dev       # http://localhost:3000
 ```
 
-Usuarios de ejemplo: `admin@europa.test / admin1234` (admin) y `laia@europa.test / europa1234`.
+Usuarios de ejemplo: `admin@europa.test / admin1234` (admin) y `laia@europa.test / europa1234`. Código de liga: `EUROPA`.
 
 > ⚠️ Los jugadores de ejemplo tienen **nombres ficticios**. Carga las plantillas reales desde `/admin/jugadores`
 > (importación CSV: `nombre;AAAA-MM-DD;POS;equipo;dorsal;valor;nombre_en_acta`). Las competiciones de cada equipo

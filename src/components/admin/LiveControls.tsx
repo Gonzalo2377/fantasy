@@ -3,13 +3,13 @@ import { useTransition } from "react";
 import { updateLive } from "@/app/admin/actions";
 import type { MatchStatus } from "@/db/schema";
 
-export function LiveControls({ id, status, minute, goalsFor, goalsAgainst }: { id: number; status: MatchStatus; minute: number | null; goalsFor: number; goalsAgainst: number }) {
+export function LiveControls({ clubLabel, id, status, minute, goalsFor, goalsAgainst }: { clubLabel: string; id: number; status: MatchStatus; minute: number | null; goalsFor: number; goalsAgainst: number }) {
   const [pending, start] = useTransition();
   const run = (p: Parameters<typeof updateLive>[1]) => start(() => updateLive(id, p));
   return (
     <div className={`card space-y-3 ${pending ? "opacity-60" : ""}`}>
       <div className="flex items-center justify-around text-center">
-        <Score label="Europa" value={goalsFor} onChange={(v) => run({ goalsFor: v })} />
+        <Score label={clubLabel} value={goalsFor} onChange={(v) => run({ goalsFor: v })} />
         <span className="text-2xl font-bold text-muted">–</span>
         <Score label="Rival" value={goalsAgainst} onChange={(v) => run({ goalsAgainst: v })} />
       </div>

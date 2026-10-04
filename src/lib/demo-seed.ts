@@ -35,12 +35,20 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
     return false;
   }
   if (reset) {
-    for (const t of ["activity", "bids", "listings", "lineups", "ownerships", "members", "leagues", "player_stats", "matches", "gameweeks", "players", "club_teams", "users"]) {
+    for (const t of ["activity", "bids", "listings", "lineups", "ownerships", "members", "leagues", "player_stats", "matches", "gameweeks", "players", "club_teams", "clubs", "users"]) {
       await db.run(sql.raw(`delete from ${t}`));
     }
   }
 
-  const teams = await db.insert(schema.clubTeams).values(TEAMS.map((t, i) => ({ ...t, sort: i }))).returning();
+  // Club de prueba. Otro club funcionaría igual: cada liga solo ve los equipos, jugadores y partidos de su club.
+  const [club] = await db
+    .insert(schema.clubs)
+    .values({ name: "CE Europa", shortName: "Europa", slug: "ce-europa", color: "#1a4b9c", createdAt: Date.now() })
+    .returning();
+  const teams = await db
+    .insert(schema.clubTeams)
+    .values(TEAMS.map((t, i) => ({ ...t, clubId: club.id, sort: i })))
+    .returning();
 
   const used = new Set<string>();
   for (const team of teams) {
@@ -68,8 +76,11 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
     const d = new Date(now.getTime() + offset * 86_400_000);
     return madridToUtc(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), h);
   };
-  const gwRows = [{ number: 1, name: "Jornada 1", deadline: day(-7, 10) }, { number: 2, name: "Jornada 2", deadline: now.getTime() - 60 * 60_000 }];
-  for (let i = 3; i <= 12; i++) gwRows.push({ number: i, name: `Jornada ${i}`, deadline: day(7 * (i - 2) - 1, 10) });
+  const gwRows = [
+    { clubId: club.id, number: 1, name: "Jornada 1", deadline: day(-7, 10) },
+    { clubId: club.id, number: 2, name: "Jornada 2", deadline: now.getTime() - 60 * 60_000 },
+  ];
+  for (let i = 3; i <= 12; i++) gwRows.push({ clubId: club.id, number: i, name: `Jornada ${i}`, deadline: day(7 * (i - 2) - 1, 10) });
   const gws = await db.insert(schema.gameweeks).values(gwRows).returning();
 
   let r = 0;
@@ -94,13 +105,14 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
   ]).returning();
 
   // Las alineaciones iniciales se guardan en la jornada abierta; las movemos a la jornada 1 para que puntúen.
-  const league = await createLeague({ name: "Liga de prueba", isPublic: false, ownerId: users[0].id });
-  const teamNames = ["Escapulats FC", "Les Graciencs", "Penya Fabra", "Vila de Gràcia"];
-  for (const [i, u] of users.entries()) {
+  // Liga privada del club con código fijo EUROPA: al unirte te da un equipo con jugadores del Europa.
+  const league = await createLeague({ clubId: club.id, name: "Liga CE Europa", isPublic: false, ownerId: users[0].id, maxMembers: 12, code: "EUROPA" });
+  const teamNames = ["Escapulats FC", "Les Graciencs", "Penya Fabra"];
+  for (const [i, u] of users.slice(1).entries()) {
     const m = await joinLeague(u.id, league.id, teamNames[i]);
     await db.update(schema.lineups).set({ gameweekId: gws[0].id }).where(sql`${schema.lineups.memberId} = ${m.id}`);
   }
-  await createLeague({ name: "Liga Pública #1", isPublic: true, ownerId: null });
+  await createLeague({ clubId: club.id, name: "Liga Pública #1", isPublic: true, ownerId: null });
 
   // Actas de la jornada 1.
   const gw1Matches = await db.select().from(schema.matches).where(sql`${schema.matches.gameweekId} = ${gws[0].id}`);

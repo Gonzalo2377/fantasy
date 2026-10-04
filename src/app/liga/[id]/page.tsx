@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function LeaguePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ j?: string }> }) {
   const { id } = await params;
   const { j } = await searchParams;
-  const { league, member } = await loadLeague(id);
+  const { league, member, club } = await loadLeague(id);
   const { table, gameweeks } = await standings(league.id);
   const selected = j ? gameweeks.find((g) => String(g.number) === j) : undefined;
   const rows = selected
@@ -32,7 +32,7 @@ export default async function LeaguePage({ params, searchParams }: { params: Pro
     <>
       <Header
         title={league.name}
-        subtitle={`${league.isPublic ? "Liga pública" : "Liga privada"} · ${table.length}/${league.maxMembers} equipos`}
+        subtitle={`${club.name} · ${league.isPublic ? "pública" : "privada"} · ${table.length}/${league.maxMembers} equipos`}
         back="/"
         right={<ShareCode code={league.code} name={league.name} />}
       />

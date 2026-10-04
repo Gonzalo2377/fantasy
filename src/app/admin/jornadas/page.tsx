@@ -1,14 +1,18 @@
 import Link from "next/link";
-import { asc } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { saveGameweek, saveMatch } from "@/app/admin/actions";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { db, schema } from "@/db";
+import { requireAdminClub } from "@/lib/admin-club";
 import { formatDateTime, toLocalInput } from "@/lib/time";
 
 export default async function GameweeksAdmin() {
-  const gws = await db.select().from(schema.gameweeks).orderBy(asc(schema.gameweeks.number));
-  const teams = await db.select().from(schema.clubTeams).orderBy(asc(schema.clubTeams.sort));
-  const matches = await db.select().from(schema.matches).orderBy(asc(schema.matches.kickoff));
+  const club = await requireAdminClub();
+  const gws = await db.select().from(schema.gameweeks).where(eq(schema.gameweeks.clubId, club.id)).orderBy(asc(schema.gameweeks.number));
+  const teams = await db.select().from(schema.clubTeams).where(eq(schema.clubTeams.clubId, club.id)).orderBy(asc(schema.clubTeams.sort));
+  const matches = gws.length
+    ? await db.select().from(schema.matches).where(inArray(schema.matches.gameweekId, gws.map((g) => g.id))).orderBy(asc(schema.matches.kickoff))
+    : [];
   const teamName = new Map(teams.map((t) => [t.id, t.shortName]));
   const nextNumber = (gws.at(-1)?.number ?? 0) + 1;
 
@@ -35,7 +39,7 @@ export default async function GameweeksAdmin() {
           </div>
           <input className="input" name="opponent" placeholder="Rival" required />
           <input className="input" type="datetime-local" name="kickoff" required aria-label="Hora de inicio" />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isHome" defaultChecked className="h-5 w-5" /> El Europa juega en casa</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isHome" defaultChecked className="h-5 w-5" /> {club.shortName} juega en casa</label>
           <input className="input" name="actaUrl" placeholder="URL del acta en la federación (opcional)" />
           <Submit className="btn btn-sm w-full">Crear partido</Submit>
         </ActionForm>

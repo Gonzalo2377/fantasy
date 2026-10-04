@@ -19,8 +19,9 @@ export default async function MatchAdmin({ params }: { params: Promise<{ id: str
     .where(and(eq(schema.players.clubTeamId, match.clubTeamId), lte(schema.players.birthDate, latestAllowedBirthDate())))
     .orderBy(asc(schema.players.shirtNumber));
   const stats = await db.select().from(schema.playerStats).where(eq(schema.playerStats.matchId, match.id));
-  const gws = await db.select().from(schema.gameweeks).orderBy(asc(schema.gameweeks.number));
-  const teams = await db.select().from(schema.clubTeams);
+  const club = team ? await db.query.clubs.findFirst({ where: eq(schema.clubs.id, team.clubId) }) : null;
+  const gws = team ? await db.select().from(schema.gameweeks).where(eq(schema.gameweeks.clubId, team.clubId)).orderBy(asc(schema.gameweeks.number)) : [];
+  const teams = team ? await db.select().from(schema.clubTeams).where(eq(schema.clubTeams.clubId, team.clubId)) : [];
 
   return (
     <div className="space-y-4">
@@ -28,12 +29,13 @@ export default async function MatchAdmin({ params }: { params: Promise<{ id: str
 
       <section>
         <h3 className="section-title">Marcador en directo</h3>
-        <LiveControls id={match.id} status={match.status} minute={match.minute} goalsFor={match.goalsFor} goalsAgainst={match.goalsAgainst} />
+        <LiveControls clubLabel={club?.shortName ?? "Club"} id={match.id} status={match.status} minute={match.minute} goalsFor={match.goalsFor} goalsAgainst={match.goalsAgainst} />
       </section>
 
       <section>
         <h3 className="section-title">Acta {match.statsApplied && <span className="text-good">· aplicada ✓</span>}</h3>
         <ActaEditor
+          clubLabel={club?.shortName ?? "Club"}
           matchId={match.id}
           roster={roster}
           initial={stats}

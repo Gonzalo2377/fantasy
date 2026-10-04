@@ -1,7 +1,7 @@
 {
-  "name": "Fantasy Europa",
-  "short_name": "Fantasy Europa",
-  "description": "El fantasy de todos los equipos +18 del CE Europa, masculino y femenino.",
+  "name": "Fantasy Clubs",
+  "short_name": "Fantasy Clubs",
+  "description": "El fantasy de tu club: todos sus equipos +18, masculino y femenino.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

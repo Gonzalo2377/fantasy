@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MarketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { league, member } = await loadLeague(id);
+  const { league, member, club } = await loadLeague(id);
   const { listings, players, clubTeams, members, bids } = schema;
 
   const open = await db
@@ -44,7 +44,7 @@ export default async function MarketPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <Header title="Mercado" subtitle={league.name} back={`/liga/${league.id}`} />
+      <Header title="Mercado" subtitle={`${league.name} · ${club.name}`} back={`/liga/${league.id}`} />
       <main className="px-4 pt-4">
         <div className="grid grid-cols-2 gap-2">
           <div className="card py-3">

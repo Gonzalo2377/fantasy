@@ -12,9 +12,21 @@ export const users = sqliteTable("users", {
   createdAt: integer("created_at").notNull(),
 });
 
-/** Equipos del club (solo categorías con jugadores mayores de edad). */
+/** Club de fútbol. Cada liga del fantasy pertenece a un club y solo usa sus equipos, jugadores y partidos. */
+export const clubs = sqliteTable("clubs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  shortName: text("short_name").notNull(),
+  slug: text("slug").notNull().unique(),
+  /** Color principal (hex) para la interfaz. */
+  color: text("color").notNull().default("#0b3f91"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** Equipos de un club (solo categorías con jugadores mayores de edad). */
 export const clubTeams = sqliteTable("club_teams", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  clubId: integer("club_id").notNull().references(() => clubs.id),
   name: text("name").notNull(),
   shortName: text("short_name").notNull(),
   gender: text("gender").$type<Gender>().notNull(),
@@ -24,7 +36,7 @@ export const clubTeams = sqliteTable("club_teams", {
   /** URL de la página del equipo/calendario en la federación (para la importación automática). */
   federationUrl: text("federation_url"),
   sort: integer("sort").notNull().default(0),
-});
+}, (t) => [index("club_teams_club_idx").on(t.clubId)]);
 
 export const players = sqliteTable(
   "players",
@@ -43,13 +55,19 @@ export const players = sqliteTable(
   (t) => [index("players_team_idx").on(t.clubTeamId)],
 );
 
-export const gameweeks = sqliteTable("gameweeks", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  number: integer("number").notNull().unique(),
-  name: text("name").notNull(),
-  /** Cierre de alineaciones (normalmente el primer partido de la jornada). */
-  deadline: integer("deadline").notNull(),
-});
+/** Jornada de un club: agrupa los partidos de todos sus equipos de un fin de semana. */
+export const gameweeks = sqliteTable(
+  "gameweeks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clubId: integer("club_id").notNull().references(() => clubs.id),
+    number: integer("number").notNull(),
+    name: text("name").notNull(),
+    /** Cierre de alineaciones (normalmente el primer partido de la jornada). */
+    deadline: integer("deadline").notNull(),
+  },
+  (t) => [uniqueIndex("gameweeks_club_number_uq").on(t.clubId, t.number)],
+);
 
 export type MatchStatus = "scheduled" | "live" | "finished";
 
@@ -95,6 +113,8 @@ export const playerStats = sqliteTable(
 
 export const leagues = sqliteTable("leagues", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Club de la liga: define plantilla inicial, mercado y calendario. */
+  clubId: integer("club_id").notNull().references(() => clubs.id),
   name: text("name").notNull(),
   isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
   code: text("code").notNull().unique(),

@@ -1,8 +1,10 @@
 "use server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { db, schema } from "@/db";
 import type { MatchStatus, Position } from "@/db/schema";
+import { ADMIN_CLUB_COOKIE, requireAdminClub } from "@/lib/admin-club";
 import { isAdult } from "@/lib/age";
 import { requireAdmin } from "@/lib/auth";
 import { fetchActaText, parseActaText } from "@/lib/federation/acta";
@@ -12,12 +14,54 @@ import { fromLocalInput } from "@/lib/time";
 type Result = { error?: string; ok?: string } | undefined;
 const POS = ["POR", "DEF", "MED", "DEL"];
 
+/* ------------------------------------------------------------ Clubs */
+
+function slugify(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export async function saveClub(_: Result, form: FormData): Promise<Result> {
+  await requireAdmin();
+  const id = Number(form.get("id") || 0);
+  const name = String(form.get("name") ?? "").trim();
+  const shortName = String(form.get("shortName") ?? "").trim() || name;
+  const color = /^#[0-9a-f]{6}$/i.test(String(form.get("color"))) ? String(form.get("color")) : "#0b3f91";
+  if (name.length < 2) return { error: "Pon el nombre del club" };
+  try {
+    if (id) await db.update(schema.clubs).set({ name, shortName, color }).where(eq(schema.clubs.id, id));
+    else {
+      const [club] = await db
+        .insert(schema.clubs)
+        .values({ name, shortName, color, slug: slugify(name), createdAt: Date.now() })
+        .returning();
+      (await cookies()).set(ADMIN_CLUB_COOKIE, String(club.id), { path: "/", sameSite: "lax", httpOnly: true });
+    }
+  } catch {
+    return { error: "Ya existe un club con ese nombre" };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: "Club guardado" };
+}
+
+export async function chooseAdminClub(form: FormData) {
+  await requireAdmin();
+  (await cookies()).set(ADMIN_CLUB_COOKIE, String(Number(form.get("clubId"))), { path: "/", sameSite: "lax", httpOnly: true });
+  revalidatePath("/admin", "layout");
+}
+
 /* ------------------------------------------------------------ Equipos */
 
 export async function saveTeam(_: Result, form: FormData): Promise<Result> {
   await requireAdmin();
+  const club = await requireAdminClub();
   const id = Number(form.get("id") || 0);
   const values = {
+    clubId: club.id,
     name: String(form.get("name") ?? "").trim(),
     shortName: String(form.get("shortName") ?? "").trim(),
     gender: (form.get("gender") === "F" ? "F" : "M") as "M" | "F",
@@ -26,7 +70,7 @@ export async function saveTeam(_: Result, form: FormData): Promise<Result> {
     federationUrl: String(form.get("federationUrl") ?? "").trim() || null,
   };
   if (!values.name || !values.shortName) return { error: "Nombre y abreviatura son obligatorios" };
-  if (id) await db.update(schema.clubTeams).set(values).where(eq(schema.clubTeams.id, id));
+  if (id) await db.update(schema.clubTeams).set(values).where(and(eq(schema.clubTeams.id, id), eq(schema.clubTeams.clubId, club.id)));
   else await db.insert(schema.clubTeams).values(values);
   revalidatePath("/admin", "layout");
   return { ok: "Equipo guardado" };
@@ -65,7 +109,8 @@ export async function savePlayer(_: Result, form: FormData): Promise<Result> {
 export async function importPlayersCsv(_: Result, form: FormData): Promise<Result> {
   await requireAdmin();
   const text = String(form.get("csv") ?? "");
-  const teams = await db.select().from(schema.clubTeams);
+  const club = await requireAdminClub();
+  const teams = await db.select().from(schema.clubTeams).where(eq(schema.clubTeams.clubId, club.id));
   const byShort = new Map(teams.map((t) => [t.shortName.toLowerCase(), t.id]));
   const rows = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   let ok = 0;
@@ -101,13 +146,14 @@ export async function importPlayersCsv(_: Result, form: FormData): Promise<Resul
 
 export async function saveGameweek(_: Result, form: FormData): Promise<Result> {
   await requireAdmin();
+  const club = await requireAdminClub();
   const number = Number(form.get("number"));
   const deadline = fromLocalInput(String(form.get("deadline") ?? ""));
   if (!number || !Number.isFinite(deadline)) return { error: "Datos no válidos" };
   const id = Number(form.get("id") || 0);
-  const values = { number, name: String(form.get("name") || `Jornada ${number}`), deadline };
+  const values = { clubId: club.id, number, name: String(form.get("name") || `Jornada ${number}`), deadline };
   try {
-    if (id) await db.update(schema.gameweeks).set(values).where(eq(schema.gameweeks.id, id));
+    if (id) await db.update(schema.gameweeks).set(values).where(and(eq(schema.gameweeks.id, id), eq(schema.gameweeks.clubId, club.id)));
     else await db.insert(schema.gameweeks).values(values);
   } catch {
     return { error: "Ya existe una jornada con ese número" };
@@ -129,6 +175,9 @@ export async function saveMatch(_: Result, form: FormData): Promise<Result> {
     updatedAt: Date.now(),
   };
   if (!values.opponent || !values.gameweekId || !values.clubTeamId) return { error: "Faltan datos" };
+  const gw = await db.query.gameweeks.findFirst({ where: eq(schema.gameweeks.id, values.gameweekId) });
+  const team = await db.query.clubTeams.findFirst({ where: eq(schema.clubTeams.id, values.clubTeamId) });
+  if (!gw || !team || gw.clubId !== team.clubId) return { error: "La jornada y el equipo deben ser del mismo club" };
   if (id) await db.update(schema.matches).set(values).where(eq(schema.matches.id, id));
   else await db.insert(schema.matches).values(values);
   revalidatePath("/admin", "layout");

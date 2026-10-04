@@ -9,7 +9,7 @@ import { money } from "@/lib/money";
 import { MIN_PLAYER_VALUE, scoreLine, valueDeltaFor } from "@/lib/scoring";
 import { nextMarketReset } from "@/lib/time";
 
-const { players, leagues, members, ownerships, listings, bids, lineups, gameweeks, matches, playerStats, activity } =
+const { players, clubTeams, leagues, members, ownerships, listings, bids, lineups, gameweeks, matches, playerStats, activity } =
   schema;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -19,44 +19,61 @@ export class GameError extends Error {}
 
 /* ---------------------------------------------------------------- Jugadores */
 
-/** Solo jugadores activos y mayores de edad pueden aparecer en el juego. */
-export function eligibleWhere() {
-  return and(eq(players.active, true), lte(players.birthDate, latestAllowedBirthDate()));
+/** Solo jugadores activos y mayores de edad del club pueden aparecer en el juego. */
+export function eligibleWhere(clubId: number) {
+  return and(
+    eq(players.active, true),
+    lte(players.birthDate, latestAllowedBirthDate()),
+    inArray(players.clubTeamId, db.select({ id: clubTeams.id }).from(clubTeams).where(eq(clubTeams.clubId, clubId))),
+  );
 }
 
-export async function eligiblePlayers(d: Db = db) {
-  return d.select().from(players).where(eligibleWhere());
+async function leagueClubId(d: Db, leagueId: number) {
+  const l = await d.query.leagues.findFirst({ where: eq(leagues.id, leagueId), columns: { clubId: true } });
+  if (!l) throw new GameError("La liga no existe");
+  return l.clubId;
 }
 
-async function freePlayerIds(d: Db, leagueId: number, extraExclude: number[] = []) {
+async function memberClubId(d: Db, memberId: number) {
+  const [row] = await d
+    .select({ clubId: leagues.clubId })
+    .from(members)
+    .innerJoin(leagues, eq(leagues.id, members.leagueId))
+    .where(eq(members.id, memberId));
+  if (!row) throw new GameError("Participante no encontrado");
+  return row.clubId;
+}
+
+/** Jugadores del club de la liga que aún no tienen dueño en esa liga. */
+async function freePlayerIds(d: Db, leagueId: number) {
+  const clubId = await leagueClubId(d, leagueId);
   const owned = await d.select({ id: ownerships.playerId }).from(ownerships).where(eq(ownerships.leagueId, leagueId));
-  const exclude = [...owned.map((o) => o.id), ...extraExclude];
-  const rows = await d
+  const exclude = owned.map((o) => o.id);
+  return d
     .select({ id: players.id, position: players.position })
     .from(players)
-    .where(exclude.length ? and(eligibleWhere(), notInArray(players.id, exclude)) : eligibleWhere());
-  return rows;
+    .where(exclude.length ? and(eligibleWhere(clubId), notInArray(players.id, exclude)) : eligibleWhere(clubId));
 }
 
 /* ---------------------------------------------------------------- Jornadas */
 
-/** Jornada abierta para alineaciones: la primera cuyo cierre aún no ha pasado. */
-export async function openGameweek(d: Db = db) {
+/** Jornada abierta para alineaciones en un club: la primera cuyo cierre aún no ha pasado. */
+export async function openGameweek(clubId: number, d: Db = db) {
   const [gw] = await d
     .select()
     .from(gameweeks)
-    .where(gt(gameweeks.deadline, Date.now()))
+    .where(and(eq(gameweeks.clubId, clubId), gt(gameweeks.deadline, Date.now())))
     .orderBy(asc(gameweeks.deadline))
     .limit(1);
   return gw ?? null;
 }
 
 /** Jornada "actual" para el panel de partidos: la última cerrada si tiene partidos sin terminar, si no la abierta. */
-export async function currentGameweek() {
+export async function currentGameweek(clubId: number) {
   const [lastLocked] = await db
     .select()
     .from(gameweeks)
-    .where(lte(gameweeks.deadline, Date.now()))
+    .where(and(eq(gameweeks.clubId, clubId), lte(gameweeks.deadline, Date.now())))
     .orderBy(desc(gameweeks.deadline))
     .limit(1);
   if (lastLocked) {
@@ -66,7 +83,7 @@ export async function currentGameweek() {
       .where(and(eq(matches.gameweekId, lastLocked.id), inArray(matches.status, ["scheduled", "live"])));
     if (pending[0].n > 0) return lastLocked;
   }
-  return (await openGameweek()) ?? lastLocked ?? null;
+  return (await openGameweek(clubId)) ?? lastLocked ?? null;
 }
 
 /* ---------------------------------------------------------------- Ligas */
@@ -76,16 +93,26 @@ function randomCode() {
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-export async function createLeague(opts: { name: string; isPublic: boolean; ownerId: number | null; maxMembers?: number }) {
+export async function createLeague(opts: {
+  clubId: number;
+  name: string;
+  isPublic: boolean;
+  ownerId: number | null;
+  maxMembers?: number;
+  code?: string;
+}) {
+  const club = await db.query.clubs.findFirst({ where: eq(schema.clubs.id, opts.clubId) });
+  if (!club) throw new GameError("El club no existe");
   for (let i = 0; i < 5; i++) {
     try {
       const [l] = await db
         .insert(leagues)
         .values({
+          clubId: opts.clubId,
           name: opts.name,
           isPublic: opts.isPublic,
           ownerId: opts.ownerId,
-          code: randomCode(),
+          code: i === 0 && opts.code ? opts.code : randomCode(),
           maxMembers: opts.maxMembers ?? (opts.isPublic ? 8 : 10),
           createdAt: Date.now(),
         })
@@ -135,7 +162,7 @@ export async function joinLeague(userId: number, leagueId: number, teamName: str
       await tx.insert(ownerships).values(
         squad.map((playerId) => ({ leagueId, memberId: member.id, playerId, boughtFor: 0, acquiredAt: now })),
       );
-      const gw = await openGameweek(tx);
+      const gw = await openGameweek(league.clubId, tx);
       if (gw) {
         await tx.insert(lineups).values({
           memberId: member.id,
@@ -152,8 +179,8 @@ export async function joinLeague(userId: number, leagueId: number, teamName: str
   );
 }
 
-/** Entra en una liga pública con hueco; si no hay, crea una nueva. */
-export async function joinPublicLeague(userId: number, teamName: string) {
+/** Entra en una liga pública del club con hueco; si no hay, crea una nueva. */
+export async function joinPublicLeague(userId: number, clubId: number, teamName: string) {
   const pub = await db
     .select({
       id: leagues.id,
@@ -162,11 +189,12 @@ export async function joinPublicLeague(userId: number, teamName: string) {
       mine: sql<number>`(select count(*) from members m where m.league_id = ${leagues.id} and m.user_id = ${userId})`,
     })
     .from(leagues)
-    .where(eq(leagues.isPublic, true))
+    .where(and(eq(leagues.isPublic, true), eq(leagues.clubId, clubId)))
     .orderBy(asc(leagues.id));
   const target = pub.find((l) => l.mine === 0 && l.n < l.maxMembers);
   const leagueId =
-    target?.id ?? (await createLeague({ name: `Liga Pública #${pub.length + 1}`, isPublic: true, ownerId: null })).id;
+    target?.id ??
+    (await createLeague({ clubId, name: `Liga Pública #${pub.length + 1}`, isPublic: true, ownerId: null })).id;
   const member = await joinLeague(userId, leagueId, teamName);
   return member;
 }
@@ -215,7 +243,7 @@ async function effectiveLineup(d: Db, memberId: number, gw: { id: number; deadli
 
 /** Garantiza que existe la alineación de la jornada abierta, copiando la anterior sin jugadores vendidos. */
 export async function ensureOpenLineup(memberId: number, d: Db = db) {
-  const gw = await openGameweek(d);
+  const gw = await openGameweek(await memberClubId(d, memberId), d);
   if (!gw) return null;
   const own = await d.query.lineups.findFirst({
     where: and(eq(lineups.memberId, memberId), eq(lineups.gameweekId, gw.id)),
@@ -516,11 +544,12 @@ export async function applyActa(matchId: number, goalsFor: number, goalsAgainst:
 /* ---------------------------------------------------------------- Clasificación */
 
 export async function standings(leagueId: number) {
+  const clubId = await leagueClubId(db, leagueId);
   const ms = await db.select().from(members).where(eq(members.leagueId, leagueId));
   const gws = await db
     .select()
     .from(gameweeks)
-    .where(lte(gameweeks.deadline, Date.now()))
+    .where(and(eq(gameweeks.clubId, clubId), lte(gameweeks.deadline, Date.now())))
     .orderBy(asc(gameweeks.deadline));
 
   const pointsByGw = new Map<number, Map<number, number>>(); // gw -> player -> points

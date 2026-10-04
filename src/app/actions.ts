@@ -92,10 +92,17 @@ function teamNameFrom(form: FormData, fallback: string) {
   return t.length >= 2 ? t : fallback;
 }
 
+function clubFrom(form: FormData) {
+  const id = Number(form.get("clubId"));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export async function joinPublic(_: Result, form: FormData): Promise<Result> {
   const user = await currentUser();
   if (!user) redirect("/login");
-  const res = await guard(() => joinPublicLeague(user.id, teamNameFrom(form, `Equipo de ${user.name}`)));
+  const clubId = clubFrom(form);
+  if (!clubId) return { error: "Elige un club" };
+  const res = await guard(() => joinPublicLeague(user.id, clubId, teamNameFrom(form, `Equipo de ${user.name}`)));
   if (res && "error" in res) return res as Result;
   redirect(`/liga/${(res as { leagueId: number }).leagueId}/equipo`);
 }
@@ -105,8 +112,12 @@ export async function createPrivate(_: Result, form: FormData): Promise<Result> 
   if (!user) redirect("/login");
   const name = String(form.get("name") ?? "").trim().slice(0, 40);
   if (name.length < 3) return { error: "Ponle un nombre a la liga" };
+  const clubId = clubFrom(form);
+  if (!clubId) return { error: "Elige un club" };
   const max = Math.min(12, Math.max(2, Number(form.get("maxMembers") ?? 10)));
-  const league = await createLeague({ name, isPublic: false, ownerId: user.id, maxMembers: max });
+  const created = await guard(() => createLeague({ clubId, name, isPublic: false, ownerId: user.id, maxMembers: max }));
+  if (created && "error" in created) return created as Result;
+  const league = created as { id: number };
   const res = await guard(() => joinLeague(user.id, league.id, teamNameFrom(form, `Equipo de ${user.name}`)));
   if (res && "error" in res) return res as Result;
   redirect(`/liga/${league.id}`);

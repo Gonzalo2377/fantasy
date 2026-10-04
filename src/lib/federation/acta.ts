@@ -129,7 +129,7 @@ export function parseActaText(
 
 /** Descarga una acta y la convierte a texto plano con saltos de línea por bloque. */
 export async function fetchActaText(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 FantasyEuropa/1.0" }, cache: "no-store" });
+  const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 FantasyClubs/1.0" }, cache: "no-store" });
   if (!res.ok) throw new Error(`La federación respondió ${res.status}`);
   const html = await res.text();
   const { load } = await import("cheerio");

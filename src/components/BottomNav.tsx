@@ -42,7 +42,7 @@ export function BottomNav() {
     { href: league ? `/liga/${league}` : "/", label: "Liga", icon: ICONS.trophy, active: /^\/liga\/\d+$/.test(pathname) },
     { href: league ? `/liga/${league}/equipo` : "/", label: "Equipo", icon: ICONS.shirt, active: pathname.endsWith("/equipo") },
     { href: league ? `/liga/${league}/mercado` : "/", label: "Mercado", icon: ICONS.market, active: pathname.endsWith("/mercado") },
-    { href: "/partidos", label: "Partidos", icon: ICONS.ball, active: pathname.startsWith("/partidos") },
+    { href: league ? `/liga/${league}/partidos` : "/partidos", label: "Partidos", icon: ICONS.ball, active: pathname.startsWith("/partidos") },
   ];
 
   return (

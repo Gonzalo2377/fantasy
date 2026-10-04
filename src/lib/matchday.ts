@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { currentGameweek } from "@/lib/game";
 
@@ -17,10 +17,13 @@ export type MatchView = {
   minute: number | null;
 };
 
-export async function matchday(gameweekId?: number) {
+/** Partidos de una jornada de un club (por defecto la jornada actual). */
+export async function matchday(clubId: number, gameweekId?: number) {
   const gw = gameweekId
-    ? await db.query.gameweeks.findFirst({ where: eq(schema.gameweeks.id, gameweekId) })
-    : await currentGameweek();
+    ? await db.query.gameweeks.findFirst({
+        where: and(eq(schema.gameweeks.id, gameweekId), eq(schema.gameweeks.clubId, clubId)),
+      })
+    : await currentGameweek(clubId);
   if (!gw) return { gameweek: null, matches: [] as MatchView[] };
   const rows = await db
     .select({ m: schema.matches, t: schema.clubTeams })

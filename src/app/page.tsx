@@ -9,6 +9,8 @@ import { LiveBoard } from "@/components/LiveBoard";
 import { Logo } from "@/components/Logo";
 import { db, schema } from "@/db";
 import { currentUser } from "@/lib/auth";
+import { APP_NAME } from "@/lib/brand";
+import { clubsOfUser, listClubs, type Club } from "@/lib/clubs";
 import { openGameweek, standings } from "@/lib/game";
 import { matchday } from "@/lib/matchday";
 import { money } from "@/lib/money";
@@ -20,26 +22,31 @@ export default async function Home() {
   if (!user) return <Landing />;
 
   const myLeagues = await db
-    .select({ league: schema.leagues, member: schema.members })
+    .select({ league: schema.leagues, member: schema.members, club: schema.clubs })
     .from(schema.members)
     .innerJoin(schema.leagues, eq(schema.leagues.id, schema.members.leagueId))
+    .innerJoin(schema.clubs, eq(schema.clubs.id, schema.leagues.clubId))
     .where(eq(schema.members.userId, user.id));
   const cards = await Promise.all(
-    myLeagues.map(async ({ league, member }) => {
+    myLeagues.map(async ({ league, member, club }) => {
       const { table } = await standings(league.id);
       const pos = table.findIndex((r) => r.member.id === member.id) + 1;
       const me = table[pos - 1];
-      return { league, member, pos, total: me?.total ?? 0, size: table.length };
+      return { league, member, club, pos, total: me?.total ?? 0, size: table.length };
     }),
   );
-  const gw = await openGameweek();
-  const { gameweek, matches } = await matchday();
+  // Partidos y cierre de jornada de cada club en el que juega el usuario.
+  const myClubs = await clubsOfUser(user.id);
+  const clubDays = await Promise.all(
+    myClubs.map(async (club) => ({ club, open: await openGameweek(club.id), ...(await matchday(club.id)) })),
+  );
+  const allClubs = await listClubs();
 
   return (
     <>
       <Header
         title={`Hola, ${user.name}`}
-        subtitle="Fantasy CE Europa"
+        subtitle={APP_NAME}
         right={
           <Link href="/perfil" aria-label="Perfil" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-sm font-bold">
             {user.name.slice(0, 1).toUpperCase()}
@@ -49,15 +56,6 @@ export default async function Home() {
       <main className="space-y-4 px-4 pt-4">
         <InstallButton />
 
-        {gw && (
-          <div className="card flex items-center justify-between bg-gradient-to-r from-brand to-brand-2 text-white">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-white/70">Cierre de alineaciones</p>
-              <p className="font-bold">{gw.name}</p>
-            </div>
-            <p className="text-lg font-extrabold"><Countdown to={gw.deadline} /></p>
-          </div>
-        )}
 
         <section>
           <h2 className="section-title">Mis ligas</h2>
@@ -72,7 +70,7 @@ export default async function Home() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-bold">{c.league.name}</p>
-                    <p className="truncate text-sm text-muted">{c.member.teamName} · {money(c.member.cash)}</p>
+                    <p className="truncate text-sm text-muted">{c.club.shortName} · {c.member.teamName} · {money(c.member.cash)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-extrabold tabular-nums">{c.total}</p>
@@ -84,16 +82,28 @@ export default async function Home() {
           </ul>
         </section>
 
-        <section>
-          <h2 className="section-title">{gameweek ? `Partidos · ${gameweek.name}` : "Partidos"}</h2>
-          <LiveBoard initial={matches} compact />
-        </section>
+        {clubDays.map(({ club, open, gameweek, matches }) => (
+          <section key={club.id} className="space-y-2">
+            <h2 className="section-title">{club.name}{gameweek ? ` · ${gameweek.name}` : ""}</h2>
+            {open && (
+              <div className="card flex items-center justify-between bg-gradient-to-r from-brand to-brand-2 text-white">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/70">Cierre de alineaciones</p>
+                  <p className="font-bold">{open.name}</p>
+                </div>
+                <p className="text-lg font-extrabold"><Countdown to={open.deadline} /></p>
+              </div>
+            )}
+            <LiveBoard initial={matches} clubId={club.id} clubName={club.name} compact />
+          </section>
+        ))}
 
         <section className="space-y-3">
           <h2 className="section-title">Jugar</h2>
           <details className="card group" open={cards.length === 0}>
             <summary className="cursor-pointer list-none font-semibold">🌍 Entrar en una liga pública</summary>
             <ActionForm action={joinPublic} className="mt-3 space-y-2">
+              <ClubSelect clubs={allClubs} />
               <input className="input" name="teamName" placeholder="Nombre de tu equipo" maxLength={30} />
               <Submit>Buscar liga pública</Submit>
             </ActionForm>
@@ -109,6 +119,7 @@ export default async function Home() {
           <details className="card">
             <summary className="cursor-pointer list-none font-semibold">➕ Crear liga privada</summary>
             <ActionForm action={createPrivate} className="mt-3 space-y-2">
+              <ClubSelect clubs={allClubs} />
               <input className="input" name="name" placeholder="Nombre de la liga" required maxLength={40} />
               <input className="input" name="teamName" placeholder="Nombre de tu equipo" maxLength={30} />
               <label className="label" htmlFor="maxMembers">Máximo de participantes</label>
@@ -130,14 +141,26 @@ export default async function Home() {
   );
 }
 
+function ClubSelect({ clubs }: { clubs: Club[] }) {
+  return (
+    <>
+      <label className="label" htmlFor="clubId">Club</label>
+      <select className="input" id="clubId" name="clubId" required defaultValue={clubs.length === 1 ? clubs[0].id : ""}>
+        {clubs.length !== 1 && <option value="" disabled>Elige club…</option>}
+        {clubs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+    </>
+  );
+}
+
 function Landing() {
   return (
     <main className="safe-top flex min-h-dvh flex-col px-5 py-10">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <Logo size={96} />
-        <h1 className="mt-4 text-3xl font-extrabold">Fantasy Europa</h1>
+        <h1 className="mt-4 text-3xl font-extrabold">{APP_NAME}</h1>
         <p className="mt-2 max-w-xs text-muted">
-          Ficha a jugadores y jugadoras de todos los equipos +18 del CE Europa, puja en el mercado y compite con tus amigos.
+          El fantasy de tu club: ficha a jugadores y jugadoras de sus equipos +18, puja en el mercado y compite con tus amigos.
         </p>
         <ul className="mt-6 space-y-2 text-left text-sm">
           <li>⚽ Puntos reales sacados de las actas</li>
