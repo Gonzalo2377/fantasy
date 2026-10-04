@@ -18,11 +18,27 @@ Web móvil-first instalable como app (PWA).
   marcador en directo y acta.
 - **Solo mayores de edad**: cualquier jugador menor de 18 años según su fecha de nacimiento queda excluido del juego automáticamente.
 
+## Publicarlo (gratis, sin tocar código)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Gonzalo2377/fantasy&project-name=fantasy-europa)
+
+1. Pulsa el botón de arriba (o en Vercel: *Add New → Project → fantasy*) y luego **Deploy**.
+2. En el proyecto de Vercel: **Storage → Create / Connect Database → Turso** (gratis) y conéctala al proyecto.
+   Esto crea solo las variables `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`.
+3. **Deployments → ⋯ → Redeploy** para que use la base de datos.
+4. Abre la web y **regístrate: el primer usuario es el administrador**.
+
+Al arrancar, la app crea sola las tablas, los 4 equipos +18, una plantilla de ejemplo, 12 jornadas y una liga pública.
+Sin el paso 2 la web funciona, pero los datos se borran cada poco (base de datos temporal).
+
+Variables opcionales: `AUTH_SECRET`, `ADMIN_EMAILS` (emails admin separados por comas), `CRON_SECRET`,
+`AUTO_IMPORT_ACTAS=1`, `SEED_DEMO=0` (no crear datos de ejemplo).
+
 ## Probarlo en local
 
 ```bash
 npm install
-npm run setup     # crea la base de datos y datos de ejemplo
+npm run setup     # datos de demostración con usuarios de prueba e historial
 npm run dev       # http://localhost:3000
 ```
 
@@ -32,7 +48,7 @@ Usuarios de ejemplo: `admin@europa.test / admin1234` (admin) y `laia@europa.test
 > (importación CSV: `nombre;AAAA-MM-DD;POS;equipo;dorsal;valor;nombre_en_acta`). Las competiciones de cada equipo
 > también están "por confirmar" en `/admin/equipos`.
 
-Para recrear los datos: `npm run db:seed -- --reset`.
+Para recrear los datos: `npm run db:seed -- --reset`. Si cambias `src/db/schema.ts`: `npm run db:generate`.
 
 ## Actas de la federación
 
@@ -52,16 +68,6 @@ las aplique solo (únicamente si la lectura parece completa; si no, quedan para 
 
 - **Android / Chrome**: botón "Instalar" en la portada o menú ⋮ → *Instalar aplicación*.
 - **iPhone / Safari**: Compartir → *Añadir a pantalla de inicio*.
-
-## Publicarlo (gratis)
-
-1. Crea una base de datos en [Turso](https://turso.tech) y copia la URL `libsql://…` y el token.
-2. Importa el repo en [Vercel](https://vercel.com) y añade las variables de `.env.example`
-   (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`, `ADMIN_EMAILS`, `CRON_SECRET`).
-3. Desde tu ordenador, con esas variables: `npm run db:push` (y opcionalmente `npm run db:seed`).
-4. El cron de `vercel.json` cierra el mercado cada mañana; además el mercado se resuelve solo cuando alguien entra.
-
-El primer usuario que se registre (o los emails de `ADMIN_EMAILS`) es administrador.
 
 ## Desarrollo
 

@@ -9,10 +9,11 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:push": "drizzle-kit push --force",
     "db:seed": "tsx --conditions react-server scripts/seed.ts",
-    "setup": "npm run db:push && npm run db:seed",
-    "icons": "node scripts/icons.mjs"
+    "setup": "npm run db:seed",
+    "icons": "node scripts/icons.mjs",
+    "db:generate": "drizzle-kit generate && node scripts/embed-migrations.mjs",
+    "db:push": "drizzle-kit push --force"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

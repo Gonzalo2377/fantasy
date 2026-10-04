@@ -1,11 +1,8 @@
 import { defineConfig } from "drizzle-kit";
 
-export default defineConfig({
-  schema: "./src/db/schema.ts",
-  out: "./drizzle",
-  dialect: process.env.DATABASE_URL?.startsWith("libsql:") ? "turso" : "sqlite",
-  dbCredentials: {
-    url: process.env.DATABASE_URL ?? "file:local.db",
-    authToken: process.env.DATABASE_AUTH_TOKEN,
-  },
-});
+const url = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL ?? "file:local.db";
+const authToken = process.env.DATABASE_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN;
+
+export default url.startsWith("libsql:")
+  ? defineConfig({ schema: "./src/db/schema.ts", out: "./drizzle", dialect: "turso", dbCredentials: { url, authToken } })
+  : defineConfig({ schema: "./src/db/schema.ts", out: "./drizzle", dialect: "sqlite", dbCredentials: { url } });

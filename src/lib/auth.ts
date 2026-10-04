@@ -3,10 +3,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
-import { db, schema } from "@/db";
+import { createHash } from "node:crypto";
+import { DB_TOKEN, DB_URL, db, schema } from "@/db";
 
 const COOKIE = "fe_session";
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-secret-cambia-esto-en-produccion");
+// Si no se define AUTH_SECRET, se deriva del token de la base de datos (secreto y estable por despliegue).
+const secret = new TextEncoder().encode(
+  process.env.AUTH_SECRET ?? createHash("sha256").update(`fantasy-europa:${DB_URL}:${DB_TOKEN ?? "dev"}`).digest("hex"),
+);
 
 export async function createSession(userId: number) {
   const token = await new SignJWT({ uid: userId })
