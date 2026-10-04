@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f2f5fb;
+  --surface: #ffffff;
+  --surface-2: #e8eef8;
+  --text: #0f1a2e;
+  --muted: #5b6b85;
+  --border: #d7e0ee;
+  --brand: #0b3f91;
+  --brand-2: #1f63d6;
+  --brand-ink: #ffffff;
+  --accent: #f2b705;
+  --good: #138a4b;
+  --bad: #c62828;
+  --live: #e53935;
+  --pitch: #1d7a46;
+  --pitch-2: #22894f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a1020;
+    --surface: #121b31;
+    --surface-2: #1a2642;
+    --text: #e8eefb;
+    --muted: #93a3c2;
+    --border: #25345a;
+    --brand: #2c6be0;
+    --brand-2: #5b8ff0;
+    --good: #3ccf7f;
+    --bad: #ff6b6b;
+    --pitch: #155c35;
+    --pitch-2: #196a3d;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-live: var(--live);
+  --color-pitch: var(--pitch);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-border bg-surface p-4;
+  }
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand px-4 font-semibold text-white transition active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 font-semibold text-text transition active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-sm {
+    @apply min-h-9 rounded-lg px-3 text-sm;
+  }
+  .input {
+    @apply min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-base text-text outline-none focus:border-brand-2;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-muted;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold;
+  }
+  .section-title {
+    @apply mb-2 mt-6 text-xs font-bold tracking-wider text-muted uppercase;
+  }
+}
+
+.pos-POR { background: #f59e0b; color: #1b1200; }
+.pos-DEF { background: #2563eb; color: #fff; }
+.pos-MED { background: #16a34a; color: #fff; }
+.pos-DEL { background: #dc2626; color: #fff; }
+
+.pitch {
+  background:
+    repeating-linear-gradient(0deg, var(--pitch) 0 48px, var(--pitch-2) 48px 96px);
+}
+
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-top { padding-top: env(safe-area-inset-top); }
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+.live-dot { animation: pulse-dot 1.2s infinite; }
