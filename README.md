@@ -30,7 +30,7 @@ npm run setup     # crea la base de datos y datos de ejemplo
 npm run dev       # http://localhost:3000
 ```
 
-Usuarios de ejemplo: `admin@europa.test / admin1234` (admin) y `laia@europa.test / europa1234`. Código de liga: `EUROPA`.
+Usuarios de ejemplo (solo en local): `admin@europa.test / admin1234` (admin) y `jugador@europa.test / europa1234`. Código de liga: `EUROPA`.
 
 > ⚠️ Los jugadores de ejemplo tienen **nombres ficticios**. Carga las plantillas reales desde `/admin/jugadores`
 > (importación CSV: `nombre;AAAA-MM-DD;POS;equipo;dorsal;valor;nombre_en_acta`). Las competiciones de cada equipo
@@ -59,12 +59,12 @@ las aplique solo (únicamente si la lectura parece completa; si no, quedan para 
 
 ## Publicarlo (gratis)
 
-1. Importa el repo en [Vercel](https://vercel.com). **Sin configurar nada ya funciona en modo demo**
-   (base de datos temporal con datos de ejemplo que se reinicia sola; aviso amarillo arriba).
+1. Importa el repo en [Vercel](https://vercel.com). Sin base de datos la web muestra cómo configurarla
+   (en Vercel cada página corre en un servidor distinto, así que hace falta una base de datos real).
 2. Para guardar datos de verdad: crea una base de datos en [Turso](https://turso.tech) y añade en Vercel
    `DATABASE_URL` (`libsql://…`) y `DATABASE_AUTH_TOKEN` (también valen `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`).
    Añade también `AUTH_SECRET` (cadena larga aleatoria), `ADMIN_EMAILS` y `CRON_SECRET`, y vuelve a desplegar.
-3. Las tablas se crean solas al arrancar. Con `SEED_DEMO=1` además mete los datos de ejemplo si la BD está vacía.
+3. Las tablas se crean solas al arrancar. Regístrate (el primer usuario es admin) y en **Admin → Clubs** pulsa *Cargar club de prueba*.
 4. El cron de `vercel.json` cierra el mercado cada mañana; además el mercado se resuelve solo cuando alguien entra.
 
 El primer usuario que se registre (o los emails de `ADMIN_EMAILS`) es administrador.

@@ -1,4 +1,4 @@
-import { saveClub } from "@/app/admin/actions";
+import { loadTestClubAction, saveClub } from "@/app/admin/actions";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { listClubs, type Club } from "@/lib/clubs";
 
@@ -16,6 +16,8 @@ function ClubForm({ c }: { c?: Club }) {
   );
 }
 
+export const maxDuration = 60;
+
 export default async function ClubsAdmin() {
   const clubs = await listClubs();
   return (
@@ -24,6 +26,14 @@ export default async function ClubsAdmin() {
         Cada liga pertenece a un club: la plantilla inicial, el mercado y el calendario salen solo de los equipos de ese club.
         Elige arriba qué club administras.
       </p>
+      <ActionForm action={loadTestClubAction} className="card space-y-2 border-brand-2">
+        <p className="font-semibold">🧪 Club de prueba: CE Europa</p>
+        <p className="text-sm text-muted">
+          Crea el club con sus 4 equipos +18 (jugadores y rivales ficticios), el calendario con un partido en directo
+          y la liga privada con código <b>EUROPA</b>.
+        </p>
+        <Submit className="btn btn-sm w-full">Cargar club de prueba</Submit>
+      </ActionForm>
       {clubs.map((c) => <ClubForm key={c.id} c={c} />)}
       <h2 className="section-title">Nuevo club</h2>
       <ClubForm />

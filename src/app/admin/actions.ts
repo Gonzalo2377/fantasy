@@ -48,6 +48,21 @@ export async function saveClub(_: Result, form: FormData): Promise<Result> {
   return { ok: "Club guardado" };
 }
 
+/** Carga el club de prueba (CE Europa) con su liga privada EUROPA. */
+export async function loadTestClubAction(): Promise<Result> {
+  await requireAdmin();
+  const { loadTestClub, TEST_LEAGUE_CODE } = await import("@/lib/demo-seed");
+  const res = await loadTestClub();
+  const club = await db.query.clubs.findFirst({ where: eq(schema.clubs.slug, "ce-europa") });
+  if (club) (await cookies()).set(ADMIN_CLUB_COOKIE, String(club.id), { path: "/", sameSite: "lax", httpOnly: true });
+  revalidatePath("/", "layout");
+  return {
+    ok: res.created
+      ? `Club de prueba cargado. Únete desde la portada con el código ${TEST_LEAGUE_CODE}.`
+      : `El club de prueba ya estaba cargado. Código de la liga: ${TEST_LEAGUE_CODE}.`,
+  };
+}
+
 export async function chooseAdminClub(form: FormData) {
   await requireAdmin();
   (await cookies()).set(ADMIN_CLUB_COOKIE, String(Number(form.get("clubId"))), { path: "/", sameSite: "lax", httpOnly: true });

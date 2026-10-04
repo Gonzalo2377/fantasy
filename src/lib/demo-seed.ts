@@ -1,10 +1,13 @@
 import "server-only";
 /**
- * Datos de ejemplo para probar la app (los usa `npm run db:seed` y el modo demo de Vercel).
- * Los nombres de jugadores son FICTICIOS: sustitúyelos desde /admin/jugadores (importación CSV).
+ * Datos de prueba: el club CE Europa con sus 4 equipos +18, jornadas, partidos y una liga privada (código EUROPA).
+ * Los nombres de jugadores y rivales son FICTICIOS: sustitúyelos desde /admin/jugadores (importación CSV).
+ *
+ *  - loadTestClub(): lo usa el botón de /admin/clubes. No toca a los usuarios reales.
+ *  - seedDemo():     lo usa `npm run db:seed` en local; además crea usuarios de ejemplo para entrar.
  */
 import bcrypt from "bcryptjs";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Position } from "@/db/schema";
 import { applyActa, createLeague, joinLeague, settleMarket, type ActaLine } from "@/lib/game";
@@ -23,35 +26,34 @@ const TEAMS = [
 ];
 const SHAPE: Position[] = ["POR", "POR", "DEF", "DEF", "DEF", "DEF", "DEF", "DEF", "DEF", "MED", "MED", "MED", "MED", "MED", "MED", "MED", "DEL", "DEL", "DEL", "DEL"];
 
+export const TEST_CLUB_SLUG = "ce-europa";
+export const TEST_LEAGUE_CODE = "EUROPA";
+
 let seed = 42;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
 const pick = <T,>(a: T[]) => a[Math.floor(rnd() * a.length)];
 
-/** Crea datos de ejemplo. Devuelve false si ya había datos y no se pidió reset. */
-export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Promise<boolean> {
+/** Crea el club de prueba con plantillas, calendario, jornada 1 puntuada y la liga EUROPA con 3 rivales. */
+export async function loadTestClub(): Promise<{ created: boolean; leagueId: number }> {
+  const existing = await db.query.clubs.findFirst({ where: eq(schema.clubs.slug, TEST_CLUB_SLUG) });
+  if (existing) {
+    const l = await db.query.leagues.findFirst({ where: eq(schema.leagues.code, TEST_LEAGUE_CODE) });
+    return { created: false, leagueId: l?.id ?? 0 };
+  }
   seed = 42;
-  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.clubTeams);
-  if (n > 0 && !reset) {
-    return false;
-  }
-  if (reset) {
-    for (const t of ["activity", "bids", "listings", "lineups", "ownerships", "members", "leagues", "player_stats", "matches", "gameweeks", "players", "club_teams", "clubs", "users"]) {
-      await db.run(sql.raw(`delete from ${t}`));
-    }
-  }
 
-  // Club de prueba. Otro club funcionaría igual: cada liga solo ve los equipos, jugadores y partidos de su club.
   const [club] = await db
     .insert(schema.clubs)
-    .values({ name: "CE Europa", shortName: "Europa", slug: "ce-europa", color: "#1a4b9c", createdAt: Date.now() })
+    .values({ name: "CE Europa", shortName: "Europa", slug: TEST_CLUB_SLUG, color: "#1a4b9c", createdAt: Date.now() })
     .returning();
   const teams = await db
     .insert(schema.clubTeams)
     .values(TEAMS.map((t, i) => ({ ...t, clubId: club.id, sort: i })))
     .returning();
 
+  // Plantillas (una sola inserción para ir rápido contra la base de datos remota).
   const used = new Set<string>();
-  for (const team of teams) {
+  const playerRows = teams.flatMap((team) => {
     const rows = SHAPE.map((position, i) => {
       let name = "";
       do name = `${pick(team.gender === "F" ? FEMALE : MALE)} ${pick(SURNAMES)} ${pick(SURNAMES)}`;
@@ -65,12 +67,13 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
         value: Math.round((base + rnd() * base) / 10_000) * 10_000,
       };
     });
-    // Un jugador menor de edad para comprobar que el filtro de +18 funciona: no debe aparecer nunca.
+    // Un menor de edad para comprobar que el filtro +18 funciona: no debe aparecer nunca en el juego.
     rows.push({ clubTeamId: team.id, name: `Juvenil Prova ${team.shortName}`, birthDate: "2010-06-01", position: "MED", shirtNumber: 30, value: 500_000 });
-    await db.insert(schema.players).values(rows);
-  }
+    return rows;
+  });
+  await db.insert(schema.players).values(playerRows);
 
-  // Jornadas: la 1 ya jugada, la 2 en curso (hoy), de la 3 en adelante cada fin de semana.
+  // Jornadas: la 1 ya jugada, la 2 en curso (hoy, con un partido en directo), de la 3 en adelante cada semana.
   const now = new Date();
   const day = (offset: number, h: number) => {
     const d = new Date(now.getTime() + offset * 86_400_000);
@@ -84,38 +87,39 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
   const gws = await db.insert(schema.gameweeks).values(gwRows).returning();
 
   let r = 0;
-  for (const gw of gws) {
-    for (const [ti, team] of teams.entries()) {
-      const kickoff = gw.number === 2 && ti === 0 ? now.getTime() - 50 * 60_000 : gw.deadline + ti * 2 * 60 * 60_000 + (ti >= 2 ? 86_400_000 : 0);
-      await db.insert(schema.matches).values({
-        gameweekId: gw.id, clubTeamId: team.id, opponent: RIVALS[r++ % RIVALS.length], isHome: (gw.number + ti) % 2 === 0, kickoff,
-        status: gw.number === 2 && ti === 0 ? "live" : "scheduled", minute: gw.number === 2 && ti === 0 ? 50 : null,
-        goalsFor: gw.number === 2 && ti === 0 ? 1 : 0, updatedAt: Date.now(),
-      });
-    }
-  }
+  const matchRows = gws.flatMap((gw) =>
+    teams.map((team, ti) => {
+      const live = gw.number === 2 && ti === 0;
+      return {
+        gameweekId: gw.id, clubTeamId: team.id, opponent: RIVALS[r++ % RIVALS.length], isHome: (gw.number + ti) % 2 === 0,
+        kickoff: live ? now.getTime() - 50 * 60_000 : gw.deadline + ti * 2 * 60 * 60_000 + (ti >= 2 ? 86_400_000 : 0),
+        status: (live ? "live" : "scheduled") as "live" | "scheduled", minute: live ? 50 : null, goalsFor: live ? 1 : 0, updatedAt: Date.now(),
+      };
+    }),
+  );
+  await db.insert(schema.matches).values(matchRows);
 
-  // Usuarios de prueba.
-  const hash = await bcrypt.hash("europa1234", 10);
-  const users = await db.insert(schema.users).values([
-    { email: "admin@europa.test", name: "Admin", passwordHash: await bcrypt.hash("admin1234", 10), isAdmin: true, createdAt: Date.now() },
-    { email: "laia@europa.test", name: "Laia", passwordHash: hash, createdAt: Date.now() },
-    { email: "pol@europa.test", name: "Pol", passwordHash: hash, createdAt: Date.now() },
-    { email: "marta@europa.test", name: "Marta", passwordHash: hash, createdAt: Date.now() },
-  ]).returning();
+  // Rivales ficticios de la liga (no se puede entrar con ellos).
+  const hash = await bcrypt.hash(crypto.randomUUID(), 4);
+  const rivals = await db
+    .insert(schema.users)
+    .values(["Laia", "Pol", "Marta"].map((name) => ({
+      email: `${name.toLowerCase()}.${club.id}@rivales.invalid`, name, passwordHash: hash, createdAt: Date.now(),
+    })))
+    .returning();
 
-  // Las alineaciones iniciales se guardan en la jornada abierta; las movemos a la jornada 1 para que puntúen.
-  // Liga privada del club con código fijo EUROPA: al unirte te da un equipo con jugadores del Europa.
-  const league = await createLeague({ clubId: club.id, name: "Liga CE Europa", isPublic: false, ownerId: users[0].id, maxMembers: 12, code: "EUROPA" });
+  const league = await createLeague({
+    clubId: club.id, name: "Liga CE Europa", isPublic: false, ownerId: null, maxMembers: 12, code: TEST_LEAGUE_CODE,
+  });
   const teamNames = ["Escapulats FC", "Les Graciencs", "Penya Fabra"];
-  for (const [i, u] of users.slice(1).entries()) {
+  for (const [i, u] of rivals.entries()) {
     const m = await joinLeague(u.id, league.id, teamNames[i]);
-    await db.update(schema.lineups).set({ gameweekId: gws[0].id }).where(sql`${schema.lineups.memberId} = ${m.id}`);
+    // Su alineación inicial cuenta desde la jornada 1 para que la clasificación tenga puntos.
+    await db.update(schema.lineups).set({ gameweekId: gws[0].id }).where(eq(schema.lineups.memberId, m.id));
   }
-  await createLeague({ clubId: club.id, name: "Liga Pública #1", isPublic: true, ownerId: null });
 
   // Actas de la jornada 1.
-  const gw1Matches = await db.select().from(schema.matches).where(sql`${schema.matches.gameweekId} = ${gws[0].id}`);
+  const gw1Matches = await db.select().from(schema.matches).where(eq(schema.matches.gameweekId, gws[0].id));
   const allPlayers = await db.select().from(schema.players);
   for (const match of gw1Matches) {
     const squad = allPlayers.filter((p) => p.clubTeamId === match.clubTeamId && p.birthDate < "2008-01-01");
@@ -129,5 +133,22 @@ export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Pro
   }
 
   await settleMarket(league.id);
+  return { created: true, leagueId: league.id };
+}
+
+/** Solo para local: club de prueba + usuarios de ejemplo con los que entrar. */
+export async function seedDemo({ reset = false }: { reset?: boolean } = {}): Promise<boolean> {
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.clubs);
+  if (Number(n) > 0 && !reset) return false;
+  if (reset) {
+    for (const t of ["activity", "bids", "listings", "lineups", "ownerships", "members", "leagues", "player_stats", "matches", "gameweeks", "players", "club_teams", "clubs", "users"]) {
+      await db.run(sql.raw(`delete from ${t}`));
+    }
+  }
+  await db.insert(schema.users).values([
+    { email: "admin@europa.test", name: "Admin", passwordHash: await bcrypt.hash("admin1234", 10), isAdmin: true, createdAt: Date.now() },
+    { email: "jugador@europa.test", name: "Jugador", passwordHash: await bcrypt.hash("europa1234", 10), createdAt: Date.now() },
+  ]);
+  await loadTestClub();
   return true;
 }

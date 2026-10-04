@@ -1,30 +1,39 @@
 import { sql } from "drizzle-orm";
-import { db, isDemoDb, schema } from "./index";
+import { db, isRemoteDb } from "./index";
 import { BOOTSTRAP_SQL } from "./bootstrap-sql";
 
 let ready: Promise<void> | null = null;
 
+/** Reintenta si otro servidor está escribiendo a la vez (SQLITE_BUSY). */
+async function retry<T>(fn: () => Promise<T>, tries = 8): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= tries || !/BUSY|locked/i.test(String((e as Error)?.message) + String((e as { cause?: unknown })?.cause))) throw e;
+      await new Promise((r) => setTimeout(r, 100 * (i + 1)));
+    }
+  }
+}
+
+const DATA_TABLES = ["activity", "bids", "listings", "lineups", "ownerships", "members", "leagues", "player_stats", "matches", "gameweeks", "players", "club_teams", "clubs", "users"];
+
 /**
- * Crea las tablas que falten (es idempotente) y, en modo demo o con SEED_DEMO=1, mete datos de ejemplo
- * si la base de datos está vacía. Se llama una vez al arrancar el servidor (src/instrumentation.ts).
+ * Crea las tablas que falten (idempotente, seguro aunque varios servidores arranquen a la vez).
+ * Nunca mete datos por su cuenta: el club de prueba se carga con un botón en /admin/clubes.
  */
 export function ensureDb(): Promise<void> {
   ready ??= (async () => {
-    // Base de datos creada con la versión antigua (sin clubs): en demo se rehace; si es real, avisa.
-    const cols = await db.all<{ name: string }>(sql`select name from pragma_table_info('leagues')`);
-    if (cols.length && !cols.some((c) => c.name === "club_id")) {
-      if (!isDemoDb) throw new Error("La base de datos es de una versión antigua sin clubs: hay que migrarla o vaciarla.");
-      const tables = await db.all<{ name: string }>(sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%'`);
-      await db.run(sql.raw("pragma foreign_keys = off"));
-      for (const t of tables) await db.run(sql.raw(`drop table if exists \`${t.name}\``));
-      await db.run(sql.raw("pragma foreign_keys = on"));
-    }
-    for (const stmt of BOOTSTRAP_SQL) await db.run(sql.raw(stmt));
-    if (isDemoDb || process.env.SEED_DEMO === "1") {
-      const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.clubTeams);
-      if (Number(n) === 0) {
-        const { seedDemo } = await import("@/lib/demo-seed");
-        await seedDemo();
+    for (const stmt of BOOTSTRAP_SQL) await retry(() => db.run(sql.raw(stmt)));
+
+    // Limpieza única: la versión anterior podía meter datos de ejemplo a medias y duplicados
+    // (varios servidores a la vez). Solo eran datos de prueba (usuarios @europa.test), así que se vacía.
+    if (isRemoteDb) {
+      const junk = await db.all<{ n: number }>(sql`select count(*) as n from users where email like '%@europa.test'`);
+      if (Number(junk[0]?.n) > 0) {
+        await db.transaction(async (tx) => {
+          for (const t of DATA_TABLES) await tx.run(sql.raw(`delete from \`${t}\``));
+        });
       }
     }
   })().catch((e) => {

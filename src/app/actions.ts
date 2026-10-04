@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db, schema } from "@/db";
+import { ensureDb } from "@/db/bootstrap";
 import { createSession, currentUser, destroySession, isAdminEmail } from "@/lib/auth";
 import {
   GameError,
@@ -50,19 +51,21 @@ const registerSchema = z.object({
 });
 
 export async function register(_: Result, form: FormData): Promise<Result> {
+  await ensureDb();
   const parsed = registerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { name, email, password } = parsed.data;
   const exists = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (exists) return { error: "Ya existe una cuenta con ese email" };
-  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.users);
+  // El primer usuario que se registre cuando aún no hay ningún administrador lo será.
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(schema.users).where(eq(schema.users.isAdmin, true));
   const [user] = await db
     .insert(schema.users)
     .values({
       name,
       email,
       passwordHash: await bcrypt.hash(password, 10),
-      isAdmin: n === 0 || isAdminEmail(email),
+      isAdmin: Number(n) === 0 || isAdminEmail(email),
       createdAt: Date.now(),
     })
     .returning();
@@ -71,6 +74,7 @@ export async function register(_: Result, form: FormData): Promise<Result> {
 }
 
 export async function login(_: Result, form: FormData): Promise<Result> {
+  await ensureDb();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });

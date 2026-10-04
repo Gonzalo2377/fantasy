@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { ensureDb } from "@/db/bootstrap";
 
 const COOKIE = "fe_session";
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-secret-cambia-esto-en-produccion");
@@ -28,6 +29,7 @@ export async function destroySession() {
 }
 
 export async function currentUser() {
+  await ensureDb(); // por si el arranque no pudo crear las tablas: se reintenta aquí (no cuesta nada si ya están)
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   try {

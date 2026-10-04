@@ -57,6 +57,13 @@ export default async function Home() {
         <InstallButton />
 
 
+        {allClubs.length === 0 && user.isAdmin && (
+          <Link href="/admin/clubes" className="card block border-brand-2">
+            <p className="font-bold">Todavía no hay ningún club</p>
+            <p className="text-sm text-muted">Eres el administrador: carga el club de prueba (CE Europa) en un clic →</p>
+          </Link>
+        )}
+
         <section>
           <h2 className="section-title">Mis ligas</h2>
           {cards.length === 0 && <p className="card text-sm text-muted">Todavía no estás en ninguna liga. ¡Únete a una abajo!</p>}

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ServiceWorker } from "@/components/ServiceWorker";
-import { isDemoDb } from "@/db";
+import { dbConfigured } from "@/db";
 import { APP_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
@@ -32,13 +32,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <body className="antialiased">
-        {isDemoDb && (
-          <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-medium text-amber-950">
-            Modo demo: datos de ejemplo que se reinician solos. Prueba la liga del CE Europa con el código EUROPA
-          </div>
+        {dbConfigured ? (
+          <>
+            <div className="mx-auto min-h-dvh max-w-xl pb-24">{children}</div>
+            <BottomNav />
+          </>
+        ) : (
+          <main className="mx-auto max-w-xl space-y-3 px-5 py-12">
+            <h1 className="text-2xl font-extrabold">Falta conectar la base de datos</h1>
+            <p>En Vercel la app necesita una base de datos para guardar usuarios, ligas y fichajes.</p>
+            <ol className="list-decimal space-y-1 pl-5 text-sm">
+              <li>En el proyecto de Vercel: <b>Storage → Create Database → Turso</b> (o crea una en turso.tech).</li>
+              <li>Comprueba que en <b>Settings → Environment Variables</b> están la URL (<code>libsql://…</code>) y el token.</li>
+              <li>Vuelve a desplegar (<b>Deployments → Redeploy</b>).</li>
+            </ol>
+          </main>
         )}
-        <div className="mx-auto min-h-dvh max-w-xl pb-24">{children}</div>
-        <BottomNav />
         <ServiceWorker />
       </body>
     </html>
