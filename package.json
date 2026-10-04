@@ -11,8 +11,9 @@
     "test": "vitest run",
     "db:push": "drizzle-kit push --force",
     "db:seed": "tsx --conditions react-server scripts/seed.ts",
-    "setup": "npm run db:push && npm run db:seed",
-    "icons": "node scripts/icons.mjs"
+    "setup": "npm run db:seed",
+    "icons": "node scripts/icons.mjs",
+    "db:bootstrap": "node scripts/gen-bootstrap.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

@@ -55,13 +55,17 @@ las aplique solo (únicamente si la lectura parece completa; si no, quedan para 
 
 ## Publicarlo (gratis)
 
-1. Crea una base de datos en [Turso](https://turso.tech) y copia la URL `libsql://…` y el token.
-2. Importa el repo en [Vercel](https://vercel.com) y añade las variables de `.env.example`
-   (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`, `ADMIN_EMAILS`, `CRON_SECRET`).
-3. Desde tu ordenador, con esas variables: `npm run db:push` (y opcionalmente `npm run db:seed`).
+1. Importa el repo en [Vercel](https://vercel.com). **Sin configurar nada ya funciona en modo demo**
+   (base de datos temporal con datos de ejemplo que se reinicia sola; aviso amarillo arriba).
+2. Para guardar datos de verdad: crea una base de datos en [Turso](https://turso.tech) y añade en Vercel
+   `DATABASE_URL` (`libsql://…`) y `DATABASE_AUTH_TOKEN` (también valen `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`).
+   Añade también `AUTH_SECRET` (cadena larga aleatoria), `ADMIN_EMAILS` y `CRON_SECRET`, y vuelve a desplegar.
+3. Las tablas se crean solas al arrancar. Con `SEED_DEMO=1` además mete los datos de ejemplo si la BD está vacía.
 4. El cron de `vercel.json` cierra el mercado cada mañana; además el mercado se resuelve solo cuando alguien entra.
 
 El primer usuario que se registre (o los emails de `ADMIN_EMAILS`) es administrador.
+
+Si cambias `src/db/schema.ts`, ejecuta `npm run db:bootstrap` para regenerar `src/db/bootstrap-sql.ts`.
 
 ## Desarrollo
 

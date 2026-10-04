@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { isDemoDb } from "@/db";
 
 export const metadata: Metadata = {
   title: { default: "Fantasy Europa", template: "%s · Fantasy Europa" },
@@ -30,6 +31,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <body className="antialiased">
+        {isDemoDb && (
+          <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-medium text-amber-950">
+            Modo demo: datos de ejemplo que se reinician solos. Entra con laia@europa.test / europa1234
+          </div>
+        )}
         <div className="mx-auto min-h-dvh max-w-xl pb-24">{children}</div>
         <BottomNav />
         <ServiceWorker />
